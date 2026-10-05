@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import re
 
 DATA_DIR = Path(__file__).resolve().parent / "ObjectImagesTrain"
+BATCH_SIZE = 32
 VAL_FRACTION = 0.20
 SEED = 42 # makes the random split the same every time
 
