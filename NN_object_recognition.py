@@ -12,8 +12,7 @@ from torchvision.transforms import v2
 import matplotlib.pyplot as plt
 import re
 
-DATA_DIR = "/Users/emiliakubik/code/EGR425/NN_Project/ObjectImagesTrain"  # set this path to the location of the folder that gets created when you open the zip file.
-BATCH_SIZE = 32
+DATA_DIR = Path(__file__).resolve().parent / "ObjectImagesTrain"
 VAL_FRACTION = 0.20
 SEED = 42 # makes the random split the same every time
 
