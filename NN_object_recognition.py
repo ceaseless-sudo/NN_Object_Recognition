@@ -653,7 +653,7 @@ def main():
         dpi=300
     )
 
-    plt.show()
+    plt.close()
 
 
     '''
@@ -687,8 +687,99 @@ def main():
         dpi=300
     )
 
-    plt.show()
+    plt.close()
 
+def test_saved_model():
+
+    TEST_DIR = Path(__file__).resolve().parent / "ObjectImagesTest"
+
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )
+
+    checkpoint = torch.load(
+        MODEL_FILE,
+        map_location=device,
+        weights_only=True
+    )
+
+    class_names = checkpoint["class_names"]
+
+    model = Classifier(
+        len(class_names)
+    ).to(device)
+
+    model.load_state_dict(
+        checkpoint["model_state_dict"]
+    )
+
+    model.eval()
+
+    test_images = [
+        p for p in sorted(TEST_DIR.iterdir())
+        if p.suffix.lower() in IMAGE_EXTS
+        and not p.name.startswith("._")
+    ]
+
+    correct = 0
+    total = 0
+
+    print()
+    print("TEST RESULTS")
+
+    with torch.no_grad():
+
+        for path in test_images:
+
+            with Image.open(path) as picture:
+                image = ImageOps.exif_transpose(
+                    picture
+                ).convert("RGB")
+
+            image = normal_transform(image)
+            image = image.unsqueeze(0).to(device)
+
+            log_probs = model(image)
+            probabilities = torch.exp(log_probs[0])
+
+            predicted_index = torch.argmax(
+                probabilities
+            ).item()
+
+            predicted_class = class_names[
+                predicted_index
+            ]
+
+            confidence = (
+                probabilities[predicted_index].item()
+                * 100
+            )
+
+            actual_class = label_from_filename(path)
+
+            is_correct = (
+                predicted_class == actual_class
+            )
+
+            if is_correct:
+                correct += 1
+
+            total += 1
+
+            print(
+                f"{path.name} | "
+                f"Actual: {actual_class} | "
+                f"Predicted: {predicted_class} | "
+                f"Confidence: {confidence:.2f}% | "
+                f"{'CORRECT' if is_correct else 'WRONG'}"
+            )
+
+    accuracy = 100 * correct / total
+
+    print()
+    print(f"Correct: {correct}/{total}")
+    print(f"Test Accuracy: {accuracy:.2f}%")
 
 if __name__ == "__main__":
     main()
+    test_saved_model()
