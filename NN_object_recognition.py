@@ -129,11 +129,8 @@ class Classifier(nn.Module):
         # 1 x 128 x 128 = 49,152 values (Grayscale)
 
         self.fc1 = nn.Linear(1 * 128 * 128, 256)
-        self.fc2 = nn.Linear(256, 224)
-        self.fc3 = nn.Linear(224, 192)
-        self.fc4 = nn.Linear(192, 128)
-        self.fc5 = nn.Linear(128, 64)
-        self.fc6 = nn.Linear(64, num_classes)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc3 = nn.Linear(128, num_classes)
 
 
     def forward(self, x):
@@ -142,13 +139,10 @@ class Classifier(nn.Module):
         # Hidden layers
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = F.relu(self.fc4(x))
-        x = F.relu(self.fc5(x))
         
 
         # Output layer
-        x = F.log_softmax(self.fc6(x), dim=1)
+        x = F.log_softmax(self.fc3(x), dim=1)
         return x
 
 
@@ -158,7 +152,7 @@ print(model)
 
 criterion = nn.NLLLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
-epochs = 100
+epochs = 30
 
 for epoch in range(epochs):
     model.train()
