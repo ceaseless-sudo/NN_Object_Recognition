@@ -2,7 +2,7 @@
 
 # Dataset creation follows the PyTorch tutorial (https://docs.pytorch.org/tutorials/beginner/basics/data_tutorial.html)
 # As well as mirroring the pattern of the in-class example (ClassActivityHrsStudied_code.txt)
-
+print("PROGRAM STARTED", flush=True)
 from collections import Counter
 from pathlib import Path
 import torch
@@ -11,6 +11,10 @@ from torch.utils.data import DataLoader, Dataset, random_split
 from torchvision.transforms import v2
 import matplotlib.pyplot as plt
 import re
+from torch import nn
+import torch.nn.functional as F
+from torch import optim
+
 
 DATA_DIR = Path(__file__).resolve().parent / "ObjectImagesTrain"
 BATCH_SIZE = 32
@@ -65,6 +69,8 @@ class ToolImageDataset(Dataset):
 # Turns every image into a tensor with shape (3, 128, 128), and converts pixel values from 1-255 to [0, 1]
 transform = v2.Compose([
     v2.ToImage(),
+    v2.Grayscale(num_output_channels=1),
+    v2.Resize((128, 128)),
     v2.ToDtype(torch.float32, scale=True),
 ])
 
@@ -105,5 +111,85 @@ for i in range(min(9, len(train_features))):
     fig.add_subplot(3, 3, i + 1)
     plt.title(class_names[train_labels[i].item()])
     plt.axis("off")
-    plt.imshow(train_features[i].permute(1, 2, 0)) 
-plt.show()
+    plt.imshow(train_features[i].squeeze(), cmap="gray") 
+#plt.show()
+
+
+
+'''
+Neural Network Architecture
+'''
+
+class Classifier(nn.Module):
+
+    def __init__(self, num_classes):
+        super().__init__()
+
+        # Input image:
+        # 1 x 128 x 128 = 49,152 values (Grayscale)
+
+        self.fc1 = nn.Linear(1 * 128 * 128, 256)
+        self.fc2 = nn.Linear(256, 224)
+        self.fc3 = nn.Linear(224, 192)
+        self.fc4 = nn.Linear(192, 128)
+        self.fc5 = nn.Linear(128, 64)
+        self.fc6 = nn.Linear(64, num_classes)
+
+
+    def forward(self, x):
+        x = x.view(x.shape[0], -1)
+        
+        # Hidden layers
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = F.relu(self.fc4(x))
+        x = F.relu(self.fc5(x))
+        
+
+        # Output layer
+        x = F.log_softmax(self.fc6(x), dim=1)
+        return x
+
+
+# Create the neural network
+model = Classifier(num_classes=len(class_names))
+print(model)
+
+criterion = nn.NLLLoss()
+optimizer = optim.Adam(model.parameters(), lr=0.001)
+epochs = 100
+
+for epoch in range(epochs):
+    model.train()
+    running_loss = 0.0
+
+    for images, labels in train_dataloader:
+        optimizer.zero_grad()
+        log_probs = model(images)
+        loss = criterion(log_probs, labels)
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item()
+
+    average_loss = running_loss / len(train_dataloader)
+
+    model.eval()
+    correct = 0
+    total = 0
+
+    with torch.no_grad():
+        for images, labels in val_dataloader:
+            log_probs = model(images)
+            predictions = torch.argmax(log_probs, dim=1)
+            correct += (predictions == labels).sum().item()
+            total += labels.size(0)
+
+    accuracy = 100 * correct / total
+
+    print(
+        f"Epoch {epoch + 1}/{epochs} | "
+        f"Error: {average_loss:.4f} | "
+        f"Validation Accuracy: {accuracy:.2f}%"
+    )
+# Print the architecture
