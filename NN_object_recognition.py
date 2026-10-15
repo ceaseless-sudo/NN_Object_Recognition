@@ -18,10 +18,11 @@ import matplotlib.pyplot as plt
 
 
 DATA_DIR = Path(__file__).resolve().parent / "ObjectImagesTrain"
+TEST_DIR = Path(__file__).resolve().parent / "ObjectImagesTest"
 BATCH_SIZE = 32
 VAL_FRACTION = 0.20
 SEED = 42
-EPOCHS = 10
+EPOCHS = 15
 IMAGE_EXTS = {".jpg"}
 
 MODEL_FILE = Path(__file__).resolve().parent / "best_cnn_experiment5.pth"
@@ -275,6 +276,88 @@ def show_mistakes(model, dataset, indices, device):
             f"Confidence: {confidence:.2f}%"
         )
 
+def test_folder_images(model, test_dir, class_names, device):
+    model.eval()
+
+    if not test_dir.exists():
+        print(f"Test folder not found: {test_dir}")
+        return
+
+    image_paths = sorted(
+        p for p in test_dir.iterdir()
+        if p.suffix.lower() in IMAGE_EXTS
+        and not p.name.startswith("._")
+    )
+
+    if not image_paths:
+        print("No test images found.")
+        return
+
+    # Randomly select ONE image
+    image_path = random.SystemRandom().choice(image_paths)
+
+
+    try:
+        with Image.open(image_path) as picture:
+            image = ImageOps.exif_transpose(
+                picture
+            ).convert("RGB")
+
+        image = normal_transform(image)
+        image = image.unsqueeze(0).to(device)
+
+        with torch.no_grad():
+            log_probs = model(image)
+            probabilities = torch.exp(log_probs[0])
+
+            predicted_index = torch.argmax(
+                probabilities
+            ).item()
+
+            confidence = (
+                probabilities[predicted_index].item() * 100
+            )
+
+        predicted_class = class_names[predicted_index]
+
+        print("\nRANDOM IMAGE TEST")
+        print("=" * 40)
+        print(f"\nImage: {image_path.name}")
+        print(f"Predicted class: {predicted_class}")
+        print(f"Confidence: {confidence:.2f}%")
+
+    except Exception as error:
+        print(f"Error processing {image_path.name}: {error}")
+
+def test_only():
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )
+
+    if not MODEL_FILE.exists():
+        print("No saved model found. Run training first.")
+        return
+
+    checkpoint = torch.load(
+        MODEL_FILE,
+        map_location=device,
+        weights_only=True
+    )
+
+    class_names = checkpoint["class_names"]
+
+    model = Classifier(len(class_names)).to(device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
+
+    print("Loaded saved model successfully", flush=True)
+
+    test_folder_images(
+        model,
+        TEST_DIR,
+        class_names,
+        device
+    )
 
 '''
 Main Program
@@ -567,6 +650,15 @@ def main():
         checkpoint["model_state_dict"]
     )
 
+    class_names = checkpoint["class_names"]
+
+    test_folder_images(
+        model, 
+        TEST_DIR,
+        class_names,
+        device
+    )
+
     best_train_accuracy, unused_loss = check_results(
         model,
         train_check_loader,
@@ -653,7 +745,7 @@ def main():
         dpi=300
     )
 
-    plt.close()
+    plt.show()
 
 
     '''
@@ -687,99 +779,9 @@ def main():
         dpi=300
     )
 
-    plt.close()
+    plt.show()
 
-def test_saved_model():
-
-    TEST_DIR = Path(__file__).resolve().parent / "ObjectImagesTest"
-
-    device = torch.device(
-        "cuda" if torch.cuda.is_available() else "cpu"
-    )
-
-    checkpoint = torch.load(
-        MODEL_FILE,
-        map_location=device,
-        weights_only=True
-    )
-
-    class_names = checkpoint["class_names"]
-
-    model = Classifier(
-        len(class_names)
-    ).to(device)
-
-    model.load_state_dict(
-        checkpoint["model_state_dict"]
-    )
-
-    model.eval()
-
-    test_images = [
-        p for p in sorted(TEST_DIR.iterdir())
-        if p.suffix.lower() in IMAGE_EXTS
-        and not p.name.startswith("._")
-    ]
-
-    correct = 0
-    total = 0
-
-    print()
-    print("TEST RESULTS")
-
-    with torch.no_grad():
-
-        for path in test_images:
-
-            with Image.open(path) as picture:
-                image = ImageOps.exif_transpose(
-                    picture
-                ).convert("RGB")
-
-            image = normal_transform(image)
-            image = image.unsqueeze(0).to(device)
-
-            log_probs = model(image)
-            probabilities = torch.exp(log_probs[0])
-
-            predicted_index = torch.argmax(
-                probabilities
-            ).item()
-
-            predicted_class = class_names[
-                predicted_index
-            ]
-
-            confidence = (
-                probabilities[predicted_index].item()
-                * 100
-            )
-
-            actual_class = label_from_filename(path)
-
-            is_correct = (
-                predicted_class == actual_class
-            )
-
-            if is_correct:
-                correct += 1
-
-            total += 1
-
-            print(
-                f"{path.name} | "
-                f"Actual: {actual_class} | "
-                f"Predicted: {predicted_class} | "
-                f"Confidence: {confidence:.2f}% | "
-                f"{'CORRECT' if is_correct else 'WRONG'}"
-            )
-
-    accuracy = 100 * correct / total
-
-    print()
-    print(f"Correct: {correct}/{total}")
-    print(f"Test Accuracy: {accuracy:.2f}%")
 
 if __name__ == "__main__":
-    main()
-    test_saved_model()
+    #main() # uncomment this to train
+    test_only()
